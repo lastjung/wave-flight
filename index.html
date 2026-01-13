@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Steampunk Wave Flight</title>
+    <!-- Tailwind CSS (via CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body { margin: 0; overflow: hidden; background: #000; }
+      canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-black text-white font-sans">
+    
+    <!-- HUD -->
+    <div class="fixed inset-0 pointer-events-none flex flex-col justify-between p-4 md:p-6 z-10 transition-opacity duration-500 overflow-y-auto">
+      
+      <!-- Top Section -->
+      <div class="flex flex-col md:flex-row justify-between items-start gap-4">
+        <div class="bg-black/80 backdrop-blur-md border border-yellow-700/50 p-4 rounded-xl shadow-2xl pointer-events-auto">
+          <div class="flex justify-between items-center">
+            <h1 class="text-xl font-bold text-yellow-500 tracking-widest">STEAMPUNK FLIGHT</h1>
+            <div class="text-right">
+              <span id="score" class="text-2xl font-mono text-yellow-500">0000</span>
+              <p class="text-[8px] text-yellow-700 uppercase">Distance Traveled</p>
+            </div>
+          </div>
+          
+          <!-- Health Bar -->
+          <div class="mt-2 w-full h-2 bg-yellow-900/30 rounded-full border border-yellow-700/20 overflow-hidden">
+            <div id="health" class="h-full bg-gradient-to-r from-red-600 to-yellow-500 transition-all duration-300" style="width: 100%;"></div>
+          </div>
+
+          <p class="text-[10px] text-yellow-600/80 uppercase mt-1 tracking-tighter">Experimental Steam Engine V2 · Vanilla JS</p>
+          
+          <!-- Controls Panel -->
+          <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+            <div class="flex flex-col gap-1">
+              <label class="text-yellow-700 flex justify-between">
+                <span>SPEED</span>
+                <span id="speedV" class="text-yellow-500">1.00</span>
+              </label>
+              <input id="speed" type="range" min="0.3" max="2.5" step="0.01" value="1.0" class="accent-yellow-600 bg-transparent h-1.5 rounded-full cursor-pointer">
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-yellow-700 flex justify-between">
+                <span>WAVE AMP</span>
+                <span id="ampV" class="text-yellow-500">1.40</span>
+              </label>
+              <input id="amp" type="range" min="0" max="3.0" step="0.01" value="1.4" class="accent-yellow-600 bg-transparent h-1.5 rounded-full cursor-pointer">
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-yellow-700 flex justify-between">
+                <span>NOISE FREQ</span>
+                <span id="freqV" class="text-yellow-500">0.08</span>
+              </label>
+              <input id="freq" type="range" min="0.02" max="0.2" step="0.001" value="0.08" class="accent-yellow-600 bg-transparent h-1.5 rounded-full cursor-pointer">
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-yellow-700 flex justify-between">
+                <span>BRASS GLOW</span>
+                <span id="glowV" class="text-yellow-500">0.60</span>
+              </label>
+              <input id="glow" type="range" min="0.1" max="1.0" step="0.01" value="0.6" class="accent-yellow-600 bg-transparent h-1.5 rounded-full cursor-pointer">
+            </div>
+            <div class="flex flex-col gap-1">
+              <div class="flex justify-between items-center text-yellow-700">
+                <label>VOLUME</label>
+                <div class="flex gap-2 items-center">
+                    <span id="volV" class="text-yellow-500">0.50</span>
+                    <button id="muteBtn" class="px-1.5 py-0.5 bg-yellow-900/40 border border-yellow-700/50 rounded text-[9px] hover:bg-yellow-800/60 uppercase transition-colors">ON</button>
+                </div>
+              </div>
+              <input id="vol" type="range" min="0" max="1.0" step="0.01" value="0.5" class="accent-yellow-600 bg-transparent h-1.5 rounded-full cursor-pointer">
+            </div>
+          </div>
+          
+          <!-- Craft Selection -->
+          <div class="mt-4 flex flex-col gap-2">
+            <span class="text-yellow-700 text-[10px] uppercase tracking-wider">Select Craft</span>
+            <div class="flex gap-2">
+              <button class="craft-btn px-2 py-1 bg-yellow-900/40 hover:bg-yellow-800/60 border border-yellow-700/50 rounded text-[9px] uppercase tracking-tighter transition-colors" data-craft="fighter">Fighter</button>
+              <button class="craft-btn px-2 py-1 bg-yellow-900/40 hover:bg-yellow-800/60 border border-yellow-700/50 rounded text-[9px] uppercase tracking-tighter transition-colors" data-craft="plane">Classic</button>
+            </div>
+          </div>
+
+          <!-- Color Presets -->
+          <div class="mt-4 flex flex-col gap-2">
+            <span class="text-yellow-700 text-[10px] uppercase tracking-wider">Atmosphere Color</span>
+            <div class="flex gap-2">
+              <button class="color-btn w-4 h-4 rounded-full border border-white/20 shadow-lg transition-transform hover:scale-110 active:scale-95" data-color="#d4a017" style="background-color: #d4a017;"></button>
+              <button class="color-btn w-4 h-4 rounded-full border border-white/20 shadow-lg transition-transform hover:scale-110 active:scale-95" data-color="#00f5ff" style="background-color: #00f5ff;"></button>
+              <button class="color-btn w-4 h-4 rounded-full border border-white/20 shadow-lg transition-transform hover:scale-110 active:scale-95" data-color="#ff4b3a" style="background-color: #ff4b3a;"></button>
+              <button class="color-btn w-4 h-4 rounded-full border border-white/20 shadow-lg transition-transform hover:scale-110 active:scale-95" data-color="#2bff88" style="background-color: #2bff88;"></button>
+              <button class="color-btn w-4 h-4 rounded-full border border-white/20 shadow-lg transition-transform hover:scale-110 active:scale-95" data-color="#b02bff" style="background-color: #b02bff;"></button>
+            </div>
+          </div>
+          
+          <div class="mt-4 flex gap-2">
+            <button id="reset" class="px-4 py-1.5 bg-yellow-900/40 hover:bg-yellow-800/60 border border-yellow-700/50 rounded-lg text-[10px] uppercase tracking-widest transition-colors flex-1">RESET ENGINE</button>
+          </div>
+        </div>
+
+        <div class="bg-black/80 backdrop-blur-md border border-yellow-700/50 px-3 py-2 rounded-xl text-[10px] text-yellow-600 flex flex-col gap-1 min-w-[100px] pointer-events-auto">
+          <div class="flex justify-between gap-4"><span>FPS:</span> <span id="fps" class="text-yellow-400">--</span></div>
+          <div class="flex justify-between gap-4"><span>RES:</span> <span id="res" class="text-yellow-400">--</span></div>
+        </div>
+      </div>
+
+      <div class="flex justify-center items-end hidden md:flex">
+        <div class="bg-black/40 backdrop-blur-sm px-6 py-2 rounded-full border border-yellow-900/30 text-xs text-yellow-500/60 uppercase tracking-widest">
+          WASD TO STEER · SHIFT TO VENT STEAM (BOOST)
+        </div>
+      </div>
+
+      <!-- Mobile Controls Help -->
+      <div class="flex justify-center md:hidden">
+        <div class="bg-yellow-600/20 backdrop-blur-sm px-4 py-2 rounded-lg border border-yellow-500/30 text-[10px] text-yellow-500/80">
+          DRAG ANYWHERE TO PILOT
+        </div>
+      </div>
+    </div>
+
+    <canvas id="c"></canvas>
+    
+    <!-- Game Over Overlay -->
+    <div id="gameOver" class="fixed inset-0 bg-black/80 flex flex-col justify-center items-center gap-6 z-40 opacity-0 pointer-events-none transition-opacity duration-500">
+      <h1 class="text-6xl md:text-8xl font-black text-red-600 tracking-tighter uppercase drop-shadow-[0_0_15px_rgba(220,38,38,0.8)]">Critial Failure</h1>
+      <p class="text-yellow-500 font-mono text-xl tracking-widest">STEAM PRESSURE LOST</p>
+      
+      <div class="flex flex-col items-center gap-2 mt-4">
+        <p class="text-sm text-gray-400">FINAL DISTANCE</p>
+        <span id="finalScore" class="text-4xl font-bold text-white font-mono">0000</span>
+      </div>
+
+      <button id="restartBtn" class="mt-8 px-8 py-3 bg-red-900/50 hover:bg-red-700/60 border border-red-500 text-red-100 rounded text-sm uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+        REIGNITE ENGINE
+      </button>
+    </div>
+
+    <!-- Collision Flash Overlay -->
+    <div id="flash" class="fixed inset-0 bg-white pointer-events-none opacity-0 z-50 transition-opacity duration-100"></div>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
