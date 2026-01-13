@@ -20,6 +20,12 @@ export class Player {
     this.mesh.scale.set(0.2, 0.2, 0.2); 
     this.mesh.position.copy(this.vPos);
     this.scene.add(this.mesh);
+    
+    this.limits = {
+        x: 18,
+        y: 1.5,
+        yMax: 22 // Increased significantly from 14 to 22
+    };
 
     this.setCraft("fighter"); // Default craft
     this._initSteamEffect();
@@ -66,7 +72,7 @@ export class Player {
     this.vPos.x += moveX * dt * 10 * currentSpeed;
     this.vPos.y += moveY * dt * 8 * currentSpeed;
     this.vPos.x = Utils.clamp(this.vPos.x, -12, 12);
-    this.vPos.y = Utils.clamp(this.vPos.y, 2, 12);
+    this.vPos.y = Utils.clamp(this.vPos.y, this.limits.y, this.limits.yMax);
 
     // Terrain reaction
     const groundH = this.environment.getHeightAt(this.vPos.x, this.vPos.z);
@@ -80,7 +86,12 @@ export class Player {
         this.speed *= 0.95; // Slow down
         // Always trigger player-collision event on terrain collision
         this._spawnSteam(); // Visual feedback of scrape
-        window.dispatchEvent(new CustomEvent('player-collision', { detail: { type: 'terrain' } }));
+        window.dispatchEvent(new CustomEvent('player-collision', { 
+            detail: { 
+                type: 'terrain',
+                position: this.vPos.clone()
+            } 
+        }));
     } else if (this.vPos.y < minH) {
         // Soft hover cushion
         this.vPos.y = Utils.lerp(this.vPos.y, minH, 0.1);

@@ -7,53 +7,107 @@ import * as THREE from "three";
 export class Obstacle {
   constructor() {
     this.mesh = new THREE.Group();
-    this._build();
+    this.type = Math.random() > 0.5 ? 'mine' : 'gear';
+    this.rotSpeed = (Math.random() - 0.5) * 2; // Random rotation speed
+    
+    if (this.type === 'mine') {
+        this._buildMine();
+    } else {
+        this._buildGear();
+    }
   }
 
-  _build() {
-    // Steampunk Floating Mine / Pillar
-    
-    // 1. Main Cylinder (Brass/Copper)
-    const geo = new THREE.CylinderGeometry(0.5, 0.5, 3.5, 8);
-    const mat = new THREE.MeshPhongMaterial({ 
-        color: 0x8b4513, 
-        shininess: 60,
-        specular: 0x442200 
+  update(dt) {
+    // Self-rotation animation
+    if (this.type === 'mine') {
+        this.mesh.rotation.y += this.rotSpeed * dt;
+        this.mesh.rotation.z += this.rotSpeed * 0.5 * dt;
+    } else {
+        // Gears spin faster on Z axis (rolling)
+        this.mesh.rotation.z += this.rotSpeed * 3 * dt;
+    }
+  }
+
+  _buildMine() {
+    // Steampunk Floating Mine
+    // 1. Core Sphere (Dark Iron)
+    const coreGeo = new THREE.IcosahedronGeometry(0.8, 1);
+    const coreMat = new THREE.MeshPhongMaterial({ 
+        color: 0x222222, 
+        flatShading: true,
+        shininess: 30
     });
-    const mainBody = new THREE.Mesh(geo, mat);
-    this.mesh.add(mainBody);
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    this.mesh.add(core);
 
-    // 2. Iron Rings (Top and Bottom)
-    const ringGeo = new THREE.TorusGeometry(0.55, 0.1, 4, 12);
-    const ringMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+    // 2. Spikes (Rusty Metal)
+    const spikeGeo = new THREE.ConeGeometry(0.15, 0.8, 6);
+    const spikeMat = new THREE.MeshPhongMaterial({ color: 0x552200 });
     
-    const topRing = new THREE.Mesh(ringGeo, ringMat);
-    topRing.rotation.x = Math.PI / 2;
-    topRing.position.y = 1.0;
-    this.mesh.add(topRing);
-
-    const botRing = new THREE.Mesh(ringGeo, ringMat);
-    botRing.rotation.x = Math.PI / 2;
-    botRing.position.y = -1.0;
-    this.mesh.add(botRing);
-
-    // 3. Spikes (Hazard indicator)
-    const spikeGeo = new THREE.ConeGeometry(0.1, 0.8, 8);
-    const spikeMat = new THREE.MeshPhongMaterial({ color: 0x550000 });
+    // Distribute spikes
+    const positions = [
+        [0, 1, 0], [0, -1, 0], 
+        [1, 0, 0], [-1, 0, 0], 
+        [0, 0, 1], [0, 0, -1]
+    ];
     
-    const topSpike = new THREE.Mesh(spikeGeo, spikeMat);
-    topSpike.position.y = 2.0;
-    this.mesh.add(topSpike);
+    positions.forEach(pos => {
+        const spike = new THREE.Mesh(spikeGeo, spikeMat);
+        const vec = new THREE.Vector3(...pos);
+        spike.position.copy(vec.multiplyScalar(0.7));
+        spike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vec.normalize());
+        this.mesh.add(spike);
+    });
 
-    const botSpike = new THREE.Mesh(spikeGeo, spikeMat);
-    botSpike.rotation.x = Math.PI;
-    botSpike.position.y = -2.0;
-    this.mesh.add(botSpike);
+    // 3. Glowing Eyes/Sensors
+    const glowGeo = new THREE.SphereGeometry(0.15, 8, 8);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    
+    [0.6, -0.6].forEach(x => {
+        const eye = new THREE.Mesh(glowGeo, glowMat);
+        eye.position.set(x, 0, 0.5);
+        this.mesh.add(eye);
+    });
+  }
 
-    // 4. Glowing Core (Optional)
-    const glowGeo = new THREE.SphereGeometry(0.3, 8, 8);
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff4500 });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    this.mesh.add(glow);
+  _buildGear() {
+    // Brass Gear
+    // 1. Main Cylinder (Brass)
+    const radius = 1.0;
+    const bodyGeo = new THREE.CylinderGeometry(radius, radius, 0.3, 16);
+    const bodyMat = new THREE.MeshPhongMaterial({ 
+        color: 0xb8860b, // Dark Goldenrod
+        shininess: 80,
+        specular: 0xffd700
+    });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    this.mesh.add(body);
+
+    // 2. Center Hole (Visual only - dark cylinder caps)
+    const holeGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.31, 12);
+    const holeMat = new THREE.MeshBasicMaterial({ color: 0x110000 });
+    const hole = new THREE.Mesh(holeGeo, holeMat);
+    this.mesh.add(hole);
+
+    // 3. Teeth (Small cubes around perimeter)
+    const toothGeo = new THREE.BoxGeometry(0.4, 0.3, 0.4);
+    const toothCount = 8;
+    
+    for(let i=0; i<toothCount; i++) {
+        const angle = (i / toothCount) * Math.PI * 2;
+        const tooth = new THREE.Mesh(toothGeo, bodyMat);
+        
+        tooth.position.set(
+            Math.cos(angle) * (radius), 
+            0, 
+            Math.sin(angle) * (radius)
+        );
+        tooth.rotation.y = -angle;
+        this.mesh.add(tooth);
+    }
+    
+    // Orient the whole gear to face player (Standing up)
+    this.mesh.rotation.x = Math.PI / 2;
+    // But wrapper rotation handles global orientation, so this is local
   }
 }

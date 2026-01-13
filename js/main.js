@@ -3,9 +3,13 @@ import { Environment } from "./Environment.js";
 import { Player } from "./Player.js";
 import { CameraSystem } from "./CameraSystem.js";
 import { Input } from "./Input.js";
-import { SoundManager } from "./SoundManager.js"; // Import SoundManager
+import { SoundManager } from "./SoundManager.js";
+import { EffectManager } from "./EffectManager.js"; // Import Effect Manager
 
 import { ObstacleManager } from "./ObstacleManager.js";
+import { ProjectileManager } from "./ProjectileManager.js";
+import { EnemyManager } from "./EnemyManager.js";
+import { ItemManager } from "./ItemManager.js";
 
 /**
  * Main Game Class - Orchestrates the entire simulation
@@ -29,6 +33,7 @@ class Game {
     this.state = {
         score: 0,
         health: 100,
+        fuel: 100, // New Fuel State
         isGameOver: false
     };
 
@@ -46,12 +51,16 @@ class Game {
       fps: document.getElementById("fps"),
       res: document.getElementById("res"),
       score: document.getElementById("score"),
+      fuelBar: document.getElementById("fuelBar"), // New
+      fuelText: document.getElementById("fuelText"), // New
+      warning: document.getElementById("warning"), // New
       vol: document.getElementById("vol"),
       volV: document.getElementById("volV"),
       muteBtn: document.getElementById("muteBtn"),
       gameOver: document.getElementById("gameOver"),
       restartBtn: document.getElementById("restartBtn"),
       finalScore: document.getElementById("finalScore"),
+      flash: document.getElementById("flash"),
     };
 
     this._init();
@@ -64,7 +73,14 @@ class Game {
     this.player = new Player(this.scene, this.input, this.env);
     this.cameraSystem = new CameraSystem(this.camera, this.player);
     this.obstacles = new ObstacleManager(this.scene, this.env);
+    
+    // Combat Systems
+    this.projectiles = new ProjectileManager(this.scene);
+    this.enemies = new EnemyManager(this.scene);
+    this.items = new ItemManager(this.scene, this.env);
+
     this.sound = new SoundManager(); // Init Sound Manager
+    this.effects = new EffectManager(this.scene); // Init Effects
 
     // Initial Camera Pos
     this.camera.position.set(0, 8, 15);
@@ -79,6 +95,7 @@ class Game {
 
     window.addEventListener("resize", () => this._onResize());
     window.addEventListener('player-collision', (e) => this._onCollision(e.detail));
+    window.addEventListener('player-search-item', (e) => this._onCollision(e.detail)); // Reuse handler
 
     // Audio Init on interaction
     const initAudio = () => {
@@ -118,6 +135,35 @@ class Game {
     this.cameraSystem.shake(detail.type === 'terrain' ? 0.5 : 0.8);
     this.sound.playCollision(); // Play SFX
     
+    // Explosion Effect
+    if (this.effects && detail.position) {
+        this.effects.explode(detail.position, detail.type === 'terrain' ? 0xff4400 : 0xffaa00, 15);
+    }
+
+    // Enemy Destroyed Event
+    if (detail.type === 'enemy-destroyed') {
+        if (this.effects && detail.position) {
+            this.effects.explode(detail.position, 0xff0000, 30); // Big Red Explosion
+        }
+        this.sound.playExplosion(); // Boom
+        
+        // Score Bonus
+        this.state.score += 500;
+        return; // Don't shake camera or damage player for shooting an enemy
+    }
+
+    // Item Collection (Fuel/Score)
+    if (detail.type === 'fuel' || detail.type === 'score') {
+        if (detail.type === 'fuel') {
+            this.state.fuel = Math.min(100, this.state.fuel + 30);
+            if (this.effects) this.effects.explode(detail.position, 0x0088ff, 10);
+        } else {
+            this.state.score += 1000;
+            if (this.effects) this.effects.explode(detail.position, 0xffd700, 10);
+        }
+        return; // Important: Don't take damage
+    }
+
     // Flash Screen Effect
     if (this.ui.flash) {
         this.ui.flash.style.opacity = detail.type === 'terrain' ? "0.2" : "0.5";
@@ -129,11 +175,12 @@ class Game {
     this.state.health -= 10;
     if (this.state.health <= 0) {
         this.state.health = 0;
-        this._triggerGameOver();
+        this._triggerGameOver("COLLISION");
     }
   }
 
-  _triggerGameOver() {
+  _triggerGameOver(reason) {
+    console.log("Game Over:", reason);
     this.state.isGameOver = true;
     
     // Show Overlay
@@ -148,8 +195,9 @@ class Game {
 
   _reset() {
     this.env.travel = 0;
-    this.state.health = 100;
     this.state.score = 0;
+    this.state.fuel = 100;
+    this.state.health = 100;
     this.state.isGameOver = false;
     
     // Hide Overlay
@@ -211,6 +259,39 @@ class Game {
         // Update Systems
         this.env.update(t, dt, speed, amp, freq, glow);
         this.player.update(t, dt);
+        this.effects.update(dt);
+        this.obstacles.update(dt, this.player.vPos, speed);
+
+        // Combat Updates
+        this.enemies.update(dt, this.player.vPos, speed);
+        this.projectiles.update(dt, this.enemies.enemies);
+        this.items.update(dt, this.player.vPos, speed);
+
+        // Ground FX (Steam & Lava)
+        if (Math.random() < 0.05) { // 5% chance per frame (approx 3 times/sec at 60fps)
+            const x = (Math.random() - 0.5) * 50;
+            const z = -60 - Math.random() * 40; // Ahead
+            const y = this.env.getHeightAt(x, z); // Spawn on ground
+            const pos = new THREE.Vector3(x, y, z);
+            
+            if (Math.random() > 0.3) {
+                this.effects.spawnSteamVent(pos);
+            } else {
+                this.effects.spawnLava(pos);
+            }
+        }
+
+        // Shooting Input
+        if (this.input.keys.space) {
+            // Fire from Center (Nose)
+            const spawnPos = this.player.vPos.clone();
+            spawnPos.y -= 0.2; 
+            spawnPos.z -= 1.0; 
+            
+            this.projectiles.shoot(spawnPos);
+            this.sound.playShoot(); // Pew Pew
+            this.input.keys.space = false; // Semi-auto
+        }
         
         // Dynamic FOV for Boost
         this.cameraSystem.targetFOV = this.input.keys.shift ? 75 : 60;
@@ -222,11 +303,37 @@ class Game {
         const isBoost = this.input.keys.shift;
         this.sound.updateEngine(isBoost ? 1.0 : 0.0);
 
-        this.obstacles.update(dt, this.player.getPosition(), speed);
-
         // Update Score
         this.state.score += dt * speed * 10;
-        if (this.ui.score) this.ui.score.textContent = Math.floor(this.state.score);
+        // UpdateUI
+        this.ui.score.innerText = Math.floor(this.state.score);
+        
+        // Fuel Logic
+        let drainRate = 2.0; // Base drain per second
+        if (this.input.keys.shift) drainRate = 10.0; // Boost drain
+        
+        this.state.fuel -= drainRate * dt;
+        if (this.state.fuel <= 0) {
+            this.state.fuel = 0;
+            this._triggerGameOver(); // Fix method name
+        }
+        
+        // Fuel UI update
+        this.ui.fuelBar.style.width = this.state.fuel + "%";
+        this.ui.fuelText.innerText = Math.floor(this.state.fuel) + "%";
+        
+        if (this.state.fuel < 20) {
+            this.ui.fuelBar.className = "h-full bg-red-500 w-full transition-all duration-200";
+            this.ui.warning.classList.remove("hidden");
+        } else {
+            this.ui.fuelBar.className = "h-full bg-yellow-500 w-full transition-all duration-200";
+            this.ui.warning.classList.add("hidden");
+        }
+
+        // Camera Shake Decay
+        this.cameraSystem.shakeIntensity *= 0.9;
+        
+        // Update Health UI
         if (this.ui.health) this.ui.health.style.width = `${this.state.health}%`;
 
         // Check for terrain collision damage (indirectly handled by Player.js dispatching events or speed drop)

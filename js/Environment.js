@@ -112,7 +112,26 @@ export class Environment {
         this.posAttr.array[ix + 1] = n * amp * 2.5; // Increased default amplitude factor
     }
     this.posAttr.needsUpdate = true;
+    this.posAttr.needsUpdate = true;
     this.stars.rotation.y += dt * 0.02;
+    
+    // Dynamic Sky Cycle
+    const cycle = (Math.abs(this.travel) * 0.005) % 3; // 0-1: Day, 1-2: Sunset, 2-3: Night
+    let targetColor;
+    
+    if (cycle < 1) { // Day -> Sunset
+        targetColor = new THREE.Color().lerpColors(new THREE.Color(0x00f5ff), new THREE.Color(0xff4b3a), cycle);
+    } else if (cycle < 2) { // Sunset -> Night
+        targetColor = new THREE.Color().lerpColors(new THREE.Color(0xff4b3a), new THREE.Color(0x1a0a2e), cycle - 1);
+    } else { // Night -> Day
+        targetColor = new THREE.Color().lerpColors(new THREE.Color(0x1a0a2e), new THREE.Color(0x00f5ff), cycle - 2);
+    }
+    
+    // Smoothly apply
+    this.scene.fog.color.lerp(targetColor, dt * 0.5);
+    this.config.wireColor = targetColor.getHex();
+    this.wireMat.color.lerp(targetColor, dt * 0.5);
+    this.sun.material.color.lerp(targetColor, dt * 0.5);
   }
 
   getHeightAt(x, z) {

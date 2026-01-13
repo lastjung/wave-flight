@@ -24,7 +24,7 @@ export class ObstacleManager {
         const obs = new Obstacle();
         obs.mesh.visible = false;
         this.scene.add(obs.mesh);
-        this.pool.push(obs.mesh);
+        this.pool.push(obs); // Store the class instance
     }
   }
 
@@ -38,17 +38,22 @@ export class ObstacleManager {
     // Move and update obstacles
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
         const obs = this.obstacles[i];
-        obs.position.z += dt * speed * 12; // Match terrain movement
+        
+        // Update animation logic
+        obs.update(dt);
+        
+        // Move Z
+        obs.mesh.position.z += dt * speed * 12; 
 
         // Remove if past player
-        if (obs.position.z > 20) {
-            obs.visible = false;
+        if (obs.mesh.position.z > 20) {
+            obs.mesh.visible = false;
             this.obstacles.splice(i, 1);
         }
 
         // Collision check
-        const dist = obs.position.distanceTo(playerPos);
-        if (dist < 1.2) {
+        const dist = obs.mesh.position.distanceTo(playerPos);
+        if (dist < 1.5) { // Slightly increased hit radius for new models
             // Collision occurred
             this._handleCollision(obs);
         }
@@ -56,26 +61,34 @@ export class ObstacleManager {
   }
 
   _spawn() {
-    const mesh = this.pool.find(m => !m.visible);
-    if (!mesh) return;
+    const obs = this.pool.find(o => !o.mesh.visible);
+    if (!obs) return;
 
     const x = (Math.random() - 0.5) * 20;
     const z = -100; // Far ahead
     const groundH = this.environment.getHeightAt(x, z);
     const y = groundH + Math.random() * 8 + 2;
 
-    mesh.position.set(x, y, z);
-    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
-    mesh.visible = true;
-    this.obstacles.push(mesh);
+    obs.mesh.position.set(x, y, z);
+    // Don't overwrite rotation here completely if Obstacle uses it for animation logic
+    // But give it a random starting rotation
+    obs.mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+    
+    obs.mesh.visible = true;
+    this.obstacles.push(obs);
   }
 
   _handleCollision(obs) {
     // Basic collision feedback (can be expanded)
-    obs.visible = false;
+    obs.mesh.visible = false;
     this.obstacles = this.obstacles.filter(o => o !== obs);
     
     // Dispatch event for Game class to handle health/score
-    window.dispatchEvent(new CustomEvent('player-collision', { detail: { type: 'obstacle' } }));
+    window.dispatchEvent(new CustomEvent('player-collision', { 
+        detail: { 
+            type: 'obstacle',
+            position: obs.mesh.position.clone() 
+        } 
+    }));
   }
 }

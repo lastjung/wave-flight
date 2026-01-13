@@ -45,43 +45,60 @@ export class SoundManager {
       }
       this.isInitialized = true;
       
-      this._startEngineSound();
-      this._startBGM();
+      // this._startEngineSound(); // Disabled per user request (No BGM/Drone)
+      // this._startBGM(); // Removed for combat focus
     }
   
-    _startBGM() {
-      // Create a dark, industrial drone chord
-      const freqs = [55, 110, 165]; // Low A notes
-      
-      freqs.forEach((f, i) => {
+    playShoot() {
+        if (!this.ctx) return;
+        
+        // Laser Pew
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         
-        osc.type = i === 0 ? 'sawtooth' : 'sine';
-        osc.frequency.value = f;
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.2);
         
-        // Detune slightly for "analog" feel
-        osc.detune.value = (Math.random() - 0.5) * 10;
-        
-        gain.gain.value = 0.05; // Very low volume for BGM
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
         
         osc.connect(gain);
         gain.connect(this.masterGain);
+        
         osc.start();
-        this.bgmOscs.push({ osc, gain });
-      });
-  
-      // LFO for pulsing effect
-      const lfo = this.ctx.createOscillator();
-      lfo.frequency.value = 0.2; // Slow pulse
-      const lfoGain = this.ctx.createGain();
-      lfoGain.gain.value = 0.02;
-      
-      lfo.connect(lfoGain);
-      this.bgmOscs[1].gain.gain.value = 0.05; 
-      // Modulate the second oscillator's volume
-      
-      this.isPlaying = true;
+        osc.stop(this.ctx.currentTime + 0.2);
+    }
+
+    playExplosion() {
+        if (!this.ctx) return;
+        
+        // Noise Burst
+        const bufferSize = this.ctx.sampleRate * 0.5; // 0.5 sec
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1);
+        }
+        
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1000, this.ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.5);
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        
+        noise.start();
     }
   
     _startEngineSound() {
