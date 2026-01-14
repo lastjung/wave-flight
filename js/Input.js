@@ -11,6 +11,7 @@ export class Input {
       right: false,
       shift: false,
       space: false,
+      cycle: false,
     };
 
     this.touch = {
@@ -46,11 +47,11 @@ export class Input {
     switch (e.code) {
       case "ArrowUp":
       case "KeyW":
-        this.keys.up = isPressed;
+        this.keys.down = isPressed;
         break;
       case "ArrowDown":
       case "KeyS":
-        this.keys.down = isPressed;
+        this.keys.up = isPressed;
         break;
       case "ArrowLeft":
       case "KeyA":
@@ -66,6 +67,9 @@ export class Input {
         break;
       case "Space":
         this.keys.space = isPressed;
+        break;
+      case "KeyQ":
+        this.keys.cycle = isPressed;
         break;
     }
   }

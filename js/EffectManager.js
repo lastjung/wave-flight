@@ -135,6 +135,24 @@ export class EffectManager {
     }
   }
 
+  spawnEmpPulse(pos) {
+    for (let i = 0; i < 14; i++) {
+      const p = this._getParticle();
+      if (!p) return;
+      p.active = true;
+      p.mesh.visible = true;
+      p.mesh.position.copy(pos);
+      p.mesh.material.color.setHex(0x6b7bff);
+      p.mesh.scale.set(0.25, 0.25, 0.25);
+      p.life = 0.9;
+      p.velocity.set(
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 6,
+        12 + Math.random() * 8
+      );
+    }
+  }
+
   update(dt) {
     for (const p of this.particles) {
         if (p.active) {

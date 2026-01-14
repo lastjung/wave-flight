@@ -50,8 +50,12 @@ export class EnemyManager {
         // We want enemies to be faster than terrain.
         // Let's set enemy speed to TerrainSpeed + 40.
         const speedBonus = enemy.speedBonus || 0;
-        const enemySpeed = (speed * 12) + 30 + speedBonus;
+        const empFactor = enemy.stunTime > 0 ? 0.15 : 1.0;
+        const enemySpeed = ((speed * 12) + 30 + speedBonus) * empFactor;
         enemy.mesh.position.z += enemySpeed * dt;
+        if (enemy.stunTime > 0) {
+            enemy.stunTime -= dt;
+        }
 
         // Banking/Wobble effect
         enemy.mesh.rotation.z = Math.sin(Date.now() * 0.003 + enemy.mesh.id) * (enemy.bankIntensity || 0.3);
@@ -81,6 +85,7 @@ export class EnemyManager {
     enemy.mesh.visible = true;
     enemy.speedBonus = 0;
     enemy.bankIntensity = 0.3;
+    enemy.stunTime = 0;
     
     // Random X, Far -Z
     const x = (Math.random() - 0.5) * 40;

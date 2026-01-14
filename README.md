@@ -3,7 +3,8 @@
 **Steampunk Wave Flight** is an immersive 3D flight simulator built with **Three.js** and **Vanilla JavaScript**.
 Set in a retro-futuristic steampunk world, players pilot a brass-finished airship over an endless, undulating neon ocean, dodging floating obstacles and managing steam pressure.
 
-![Gameplay Screenshot](https://via.placeholder.com/800x450?text=Steampunk+Wave+Flight+Demo)
+Live at https://lastjung.github.io/wave-flight/
+
 
 ## 🎮 Key Features
 
@@ -21,11 +22,14 @@ Set in a retro-futuristic steampunk world, players pilot a brass-finished airshi
 
 |    Control     | Action                                 |
 | :------------: | :------------------------------------- |
-|   **W / S**    | Pitch Down / Up (Inverted Flight)      |
+|   **W / S**    | Pitch Up / Down                        |
 |   **A / D**    | Bank Left / Right                      |
 |   **SHIFT**    | **Steam Boost** (Increase Speed & FOV) |
+|     **Q**      | Cycle Ammo Type                        |
 | **Mouse Drag** | Mobile/Touch Pilot Control             |
 |   **CLICK**    | Start Audio Engine                     |
+
+Detailed controls: `docs/how_to_play.md`
 
 ## 🛠️ Tech Stack
 

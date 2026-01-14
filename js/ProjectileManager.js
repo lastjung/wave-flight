@@ -10,7 +10,14 @@ export class ProjectileManager {
     // Bullet Geometry and Material
     const geo = new THREE.CapsuleGeometry(0.05, 0.4, 4, 8);
     geo.rotateX(Math.PI / 2); // Align with Z axis
-    const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green laser
+    this.materials = {
+      normal: new THREE.MeshBasicMaterial({ color: 0x00ff00 }),
+      pierce: new THREE.MeshBasicMaterial({ color: 0x00f5ff }),
+      explosive: new THREE.MeshBasicMaterial({ color: 0xffaa33 }),
+      emp: new THREE.MeshBasicMaterial({ color: 0x6b7bff }),
+      shotgun: new THREE.MeshBasicMaterial({ color: 0xffcc66 }),
+    };
+    const mat = this.materials.normal;
 
     // Initialize Pool
     for (let i = 0; i < this.poolSize; i++) {
@@ -22,12 +29,29 @@ export class ProjectileManager {
             active: false,
             velocity: new THREE.Vector3(),
             life: 0,
-            lastPos: new THREE.Vector3()
+            lastPos: new THREE.Vector3(),
+            type: "normal",
+            pierceLeft: 0,
+            hitIds: null,
         });
+    }
+
+    this.beams = [];
+    this.beamPoolSize = 6;
+    const beamMat = new THREE.LineBasicMaterial({ color: 0xff4b3a });
+    for (let i = 0; i < this.beamPoolSize; i++) {
+        const beamGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(),
+            new THREE.Vector3(0, 0, -1),
+        ]);
+        const beam = new THREE.Line(beamGeo, beamMat.clone());
+        beam.visible = false;
+        this.scene.add(beam);
+        this.beams.push({ mesh: beam, life: 0, active: false });
     }
   }
 
-  shoot(position) {
+  shoot(position, type = "normal", options = {}) {
     // Find inactive bullet
     const b = this.pool.find(b => !b.active);
     if (!b) return;
@@ -35,18 +59,24 @@ export class ProjectileManager {
     b.active = true;
     b.mesh.visible = true;
     b.mesh.position.copy(position);
+    b.type = type;
+    b.pierceLeft = type === "pierce" ? 5 : 0;
+    b.hitIds = type === "pierce" ? new Set() : null;
+    b.mesh.material = this.materials[type] || this.materials.normal;
     
     // Slight offset to spawn from nose/wings? Just center for now
     b.mesh.position.y -= 0.2; 
     b.mesh.position.z -= 1.0; // In front of player
 
     // Velocity: Straight forward (-Z)
-    b.velocity.set(0, 0, -50); // Fast speed
-    b.life = 2.0; // 2 seconds life range
+    const dir = options.direction || new THREE.Vector3(0, 0, -1);
+    const speed = options.speed ?? 50;
+    b.velocity.copy(dir).normalize().multiplyScalar(speed);
+    b.life = options.life ?? 2.0; // 2 seconds life range
     b.lastPos.copy(b.mesh.position);
   }
 
-  update(dt, enemies, walls) {
+  update(dt, enemies, walls, obstacleManager) {
     for (const b of this.pool) {
       if (!b.active) continue;
 
@@ -66,18 +96,94 @@ export class ProjectileManager {
       let hit = false;
       if (enemies && enemies.length > 0) {
         for (const enemy of enemies) {
+            if (b.hitIds?.has(enemy.mesh.id)) continue;
             const dist = b.mesh.position.distanceTo(enemy.mesh.position);
-            if (dist < 1.5) { // Hit radius
-                this._deactivate(b);
-                enemy.takeDamage(10);
-                hit = true;
-                break; 
+            if (dist < 1.6) { // Hit radius
+                if (b.type === "explosive") {
+                    this._triggerExplosion(b.mesh.position, enemies, obstacleManager, 4.0);
+                    this._deactivate(b);
+                    hit = true;
+                    break;
+                }
+                if (b.type === "emp") {
+                    enemy.stunTime = Math.max(enemy.stunTime || 0, 1.8);
+                    window.dispatchEvent(new CustomEvent("bullet-emp", {
+                      detail: { position: enemy.mesh.position.clone() }
+                    }));
+                    this._deactivate(b);
+                    hit = true;
+                    break;
+                } else if (b.type === "pierce") {
+                    enemy.takeDamage(8);
+                } else if (b.type === "shotgun") {
+                    enemy.takeDamage(6);
+                } else {
+                    enemy.takeDamage(10);
+                }
+                if (b.type === "pierce") {
+                    b.hitIds?.add(enemy.mesh.id);
+                    b.pierceLeft -= 1;
+                    if (b.pierceLeft <= 0) {
+                        this._deactivate(b);
+                        hit = true;
+                        break;
+                    }
+                } else if (b.type !== "emp") {
+                    this._deactivate(b);
+                    hit = true;
+                    break;
+                }
             }
         }
       }
       if (hit) continue;
 
-      // 2. Collision with Walls
+      // 2. Collision with Obstacles
+      const obstacleList = obstacleManager?.obstacles;
+      if (obstacleList && obstacleList.length > 0) {
+        for (const obs of obstacleList) {
+          if (!obs.mesh.visible) continue;
+          if (b.hitIds?.has(obs.mesh.id)) continue;
+          const dist = b.mesh.position.distanceTo(obs.mesh.position);
+          if (dist < 1.6) {
+            if (b.type === "explosive") {
+              this._triggerExplosion(b.mesh.position, enemies, obstacleManager, 4.0);
+              this._deactivate(b);
+              hit = true;
+              break;
+            }
+            if (b.type === "emp") {
+              window.dispatchEvent(new CustomEvent("bullet-emp", {
+                detail: { position: obs.mesh.position.clone() }
+              }));
+              this._deactivate(b);
+              hit = true;
+              break;
+            } else {
+              obstacleManager.destroyObstacle(obs);
+              window.dispatchEvent(new CustomEvent("bullet-hit-obstacle", {
+                detail: { position: obs.mesh.position.clone(), obstacle: obs }
+              }));
+            }
+            if (b.type === "pierce") {
+              b.hitIds?.add(obs.mesh.id);
+              b.pierceLeft -= 1;
+              if (b.pierceLeft <= 0) {
+                this._deactivate(b);
+                hit = true;
+                break;
+              }
+            } else {
+              this._deactivate(b);
+              hit = true;
+              break;
+            }
+          }
+        }
+      }
+      if (hit) continue;
+
+      // 3. Collision with Walls (impact effect + bullet destruction)
       if (walls && walls.length > 0) {
           for (const w of walls) {
               if (!w.group.visible || w.passed) continue;
@@ -95,11 +201,23 @@ export class ProjectileManager {
               const inHole = Math.abs(dx) < holeW / 2 && Math.abs(dy) < holeH / 2;
 
               if (!inHole) {
+                  // Spawn hit effect at the wall plane for clearer feedback.
+                  const denom = currZ - prevZ;
+                  const t = denom !== 0 ? (wallZ - prevZ) / denom : 0;
+                  const hitPos = b.lastPos.clone().lerp(b.mesh.position, Math.max(0, Math.min(1, t)));
+                  if (b.type === "explosive") {
+                      this._triggerExplosion(hitPos, enemies, obstacleManager, 4.0);
+                  } else if (b.type === "emp") {
+                      window.dispatchEvent(new CustomEvent("bullet-emp", {
+                          detail: { position: hitPos }
+                      }));
+                  } else {
+                      window.dispatchEvent(new CustomEvent("bullet-hit-wall", {
+                          detail: { position: hitPos }
+                      }));
+                  }
                   this._deactivate(b);
                   hit = true;
-                  window.dispatchEvent(new CustomEvent("bullet-hit-wall", {
-                      detail: { position: b.mesh.position.clone() }
-                  }));
               }
               if (hit) break;
           }
@@ -108,8 +226,92 @@ export class ProjectileManager {
     }
   }
 
+  _triggerExplosion(position, enemies, obstacleManager, radius) {
+    let destroyedObstacles = 0;
+    if (enemies && enemies.length > 0) {
+      for (const enemy of enemies) {
+        if (enemy.mesh.position.distanceTo(position) <= radius) {
+          enemy.takeDamage(20);
+        }
+      }
+    }
+    const obstacleList = obstacleManager?.obstacles;
+    if (obstacleList && obstacleList.length > 0) {
+      for (const obs of obstacleList.slice()) {
+        if (obs.mesh.position.distanceTo(position) <= radius) {
+          obstacleManager.destroyObstacle(obs);
+          destroyedObstacles += 1;
+        }
+      }
+    }
+    // Visual + audio handled by event listener in main.
+    window.dispatchEvent(new CustomEvent("bullet-explosion", {
+      detail: { position: position.clone(), radius, destroyedObstacles }
+    }));
+  }
+
   _deactivate(bullet) {
     bullet.active = false;
     bullet.mesh.visible = false;
+  }
+
+  fireLaser(start, direction, enemies, obstacleManager) {
+    const dir = direction.clone().normalize();
+    const range = 140;
+    const end = start.clone().addScaledVector(dir, range);
+    const radius = 1.0;
+
+    // Apply damage along beam
+    if (enemies && enemies.length > 0) {
+      for (const enemy of enemies) {
+        const d = this._distanceToSegment(enemy.mesh.position, start, end);
+        if (d <= radius) {
+          enemy.takeDamage(15);
+        }
+      }
+    }
+    const obstacleList = obstacleManager?.obstacles;
+    if (obstacleList && obstacleList.length > 0) {
+      for (const obs of obstacleList.slice()) {
+        const d = this._distanceToSegment(obs.mesh.position, start, end);
+        if (d <= radius) {
+          obstacleManager.destroyObstacle(obs);
+        }
+      }
+    }
+
+    // Visual beam
+    const beam = this.beams.find(b => !b.active);
+    if (beam) {
+      const pos = beam.mesh.geometry.attributes.position;
+      pos.setXYZ(0, start.x, start.y, start.z);
+      pos.setXYZ(1, end.x, end.y, end.z);
+      pos.needsUpdate = true;
+      beam.mesh.visible = true;
+      beam.active = true;
+      beam.life = 0.12;
+    }
+
+    window.dispatchEvent(new CustomEvent("bullet-laser", {
+      detail: { position: end.clone() }
+    }));
+  }
+
+  updateBeams(dt) {
+    for (const b of this.beams) {
+      if (!b.active) continue;
+      b.life -= dt;
+      if (b.life <= 0) {
+        b.active = false;
+        b.mesh.visible = false;
+      }
+    }
+  }
+
+  _distanceToSegment(p, a, b) {
+    const ab = b.clone().sub(a);
+    const t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq()));
+    const closest = a.clone().addScaledVector(ab, t);
+    return p.distanceTo(closest);
   }
 }

@@ -25,7 +25,8 @@ export class Environment {
   }
 
   _init() {
-    this.scene.fog = new THREE.FogExp2(this.config.skyColor, 0.018);
+    // Disable fog so the scene doesn't feel like a transparent screen.
+    this.scene.fog = null;
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.15));
 
     this._createTerrain();
@@ -128,7 +129,9 @@ export class Environment {
     }
     
     // Smoothly apply
-    this.scene.fog.color.lerp(targetColor, dt * 0.5);
+    if (this.scene.fog) {
+        this.scene.fog.color.lerp(targetColor, dt * 0.5);
+    }
     this.config.wireColor = targetColor.getHex();
     this.wireMat.color.lerp(targetColor, dt * 0.5);
     this.sun.material.color.lerp(targetColor, dt * 0.5);
@@ -150,6 +153,6 @@ export class Environment {
     this.sun.material.color.copy(color);
     
     // Optional: Subtle fog update to match the tone
-    // this.scene.fog.color.lerp(color, 0.1); 
+    // if (this.scene.fog) this.scene.fog.color.lerp(color, 0.1);
   }
 }

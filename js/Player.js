@@ -80,7 +80,7 @@ export class Player {
   update(time, dt) {
     // Movement Logic
     const moveX = (this.input.keys.left ? -1 : 0) + (this.input.keys.right ? 1 : 0) + this.input.touch.x;
-    // Inverted controls: W/Up for down (-), S/Down for up (+)
+    // Swapped controls: W/Up for up (+), S/Down for down (-)
     const moveY = (this.input.keys.up || this.input.keys.w ? -1 : 0) + (this.input.keys.down || this.input.keys.s ? 1 : 0) + this.input.touch.y;
     const isVenting = this.input.keys.shift;
 

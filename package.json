@@ -1,0 +1,22 @@
+{
+  "name": "wave-flight",
+  "version": "1.0.0",
+  "description": "**Steampunk Wave Flight** is an immersive 3D flight simulator built with **Three.js** and **Vanilla JavaScript**. Set in a retro-futuristic steampunk world, players pilot a brass-finished airship over an endless, undulating neon ocean, dodging floating obstacles and managing steam pressure.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lastjung/wave-flight.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/lastjung/wave-flight/issues"
+  },
+  "homepage": "https://github.com/lastjung/wave-flight#readme"
+}

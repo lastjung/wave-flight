@@ -91,4 +91,9 @@ export class ObstacleManager {
         } 
     }));
   }
+
+  destroyObstacle(obs) {
+    obs.mesh.visible = false;
+    this.obstacles = this.obstacles.filter(o => o !== obs);
+  }
 }

@@ -19,12 +19,15 @@ class Game {
   constructor() {
     this.canvas = document.getElementById("c");
     this.audioInit = false; // Flag for audio init
+    this.isMobile = window.innerWidth < 768;
+    this.hudVisible = !this.isMobile;
+
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
       antialias: true,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(this.isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
 
     this.scene = new THREE.Scene();
@@ -39,6 +42,7 @@ class Game {
     };
     this.lastCollisionSfx = 0;
     this.lastBoost = false;
+    this.shotgunPhase = 0;
 
     // UI Elements
     this.ui = {
@@ -64,6 +68,10 @@ class Game {
       restartBtn: document.getElementById("restartBtn"),
       finalScore: document.getElementById("finalScore"),
       flash: document.getElementById("flash"),
+      ammoType: document.getElementById("ammoType"),
+      fireBtn: document.getElementById("fireBtn"),
+      hud: document.getElementById("hud"),
+      hudToggle: document.getElementById("hudToggle"),
     };
 
     this._init();
@@ -79,9 +87,21 @@ class Game {
     
     // Combat Systems
     this.projectiles = new ProjectileManager(this.scene);
+    this.weapon = {
+      types: [
+        { id: "normal", label: "NORMAL" },
+        { id: "pierce", label: "PIERCE" },
+        { id: "explosive", label: "BLAST" },
+        { id: "emp", label: "EMP" },
+        { id: "shotgun", label: "SHOTGUN" },
+        { id: "laser", label: "LASER" },
+      ],
+      current: 0,
+    };
     this.enemies = new EnemyManager(this.scene);
     this.items = new ItemManager(this.scene, this.env);
-    this.walls = new WallManager(this.scene, this.env); // Init Walls
+    // Disable walls entirely to avoid blocking gameplay.
+    this.walls = { walls: [], update: () => {} };
 
     this.sound = new SoundManager(); // Init Sound Manager
     this.effects = new EffectManager(this.scene); // Init Effects
@@ -96,14 +116,61 @@ class Game {
     ["speed", "amp", "freq", "glow", "vol"].forEach(k => {
       this.ui[k]?.addEventListener("input", () => this._syncUI());
     });
+    if (this.ui.fireBtn) {
+      this.ui.fireBtn.addEventListener("pointerdown", () => {
+        this.input.keys.space = true;
+      });
+    }
+    if (this.ui.hudToggle && this.ui.hud) {
+      this.ui.hudToggle.addEventListener("click", () => {
+        this.hudVisible = !this.hudVisible;
+        this._applyHudVisibility();
+      });
+    }
 
     window.addEventListener("resize", () => this._onResize());
     window.addEventListener('player-collision', (e) => this._onCollision(e.detail));
     window.addEventListener('player-search-item', (e) => this._onCollision(e.detail)); // Reuse handler
     window.addEventListener('bullet-hit-wall', (e) => {
       if (this.effects && e.detail?.position) {
+        this.effects.explode(e.detail.position, 0xffcc33, 24);
         this.effects.spawnSpark(e.detail.position);
       }
+      this.sound.playCollision();
+      if (this.ui.flash) {
+        this.ui.flash.style.opacity = "0.5";
+        setTimeout(() => {
+          if (this.ui.flash) this.ui.flash.style.opacity = "0";
+        }, 80);
+      }
+    });
+    window.addEventListener('bullet-hit-obstacle', (e) => {
+      if (this.effects && e.detail?.position) {
+        this.effects.explode(e.detail.position, 0xffaa33, 16);
+      }
+      this.sound.playExplosion();
+      this.state.score += 200;
+    });
+    window.addEventListener('bullet-explosion', (e) => {
+      if (this.effects && e.detail?.position) {
+        this.effects.explode(e.detail.position, 0xffaa33, 28);
+      }
+      this.sound.playExplosion();
+      if (typeof e.detail?.destroyedObstacles === "number") {
+        this.state.score += e.detail.destroyedObstacles * 200;
+      }
+    });
+    window.addEventListener('bullet-emp', (e) => {
+      if (this.effects && e.detail?.position) {
+        this.effects.spawnEmpPulse(e.detail.position);
+      }
+      this.sound.playCollision();
+    });
+    window.addEventListener('bullet-laser', (e) => {
+      if (this.effects && e.detail?.position) {
+        this.effects.spawnSpark(e.detail.position);
+      }
+      this.sound.playCollision();
     });
 
     // Audio Init on interaction
@@ -118,6 +185,8 @@ class Game {
 
     this._onResize(); // Initial call
     this._syncUI();
+    this._syncAmmoUI();
+    this._applyHudVisibility();
 
     // Color Preset Events
     document.querySelectorAll(".color-btn").forEach(btn => {
@@ -226,6 +295,8 @@ class Game {
     this.state.fuel = 100;
     this.state.health = 100;
     this.state.isGameOver = false;
+    this.weapon.current = 0;
+    this._syncAmmoUI();
     
     // Hide Overlay
     if (this.ui.gameOver) {
@@ -257,13 +328,39 @@ class Game {
     }
   }
 
+  _syncAmmoUI() {
+    if (!this.ui.ammoType) return;
+    this.ui.ammoType.textContent = this.weapon.types[this.weapon.current].label;
+  }
+
+  _cycleAmmo() {
+    this.weapon.current = (this.weapon.current + 1) % this.weapon.types.length;
+    this._syncAmmoUI();
+  }
+
   _onResize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
+    const isMobile = w < 768;
     this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     if (this.ui.res) this.ui.res.textContent = `${w}×${h}`;
+    if (this.isMobile !== isMobile) {
+      this.isMobile = isMobile;
+      this.hudVisible = !isMobile;
+      this._applyHudVisibility();
+    }
+  }
+
+  _applyHudVisibility() {
+    if (!this.ui.hud) return;
+    if (this.hudVisible) {
+      this.ui.hud.classList.remove("opacity-0");
+    } else {
+      this.ui.hud.classList.add("opacity-0");
+    }
   }
 
   _animate() {
@@ -293,7 +390,8 @@ class Game {
 
         // Combat Updates
         this.enemies.update(dt, this.player.vPos, speed);
-        this.projectiles.update(dt, this.enemies.enemies, this.walls.walls); // Pass walls
+        this.projectiles.update(dt, this.enemies.enemies, this.walls.walls, this.obstacles);
+        this.projectiles.updateBeams(dt);
         this.items.update(dt, this.player.vPos, speed);
         this.walls.update(dt, this.player.vPos, speed);
 
@@ -312,14 +410,39 @@ class Game {
         }
 
         // Shooting Input
+        if (this.input.keys.cycle) {
+            this._cycleAmmo();
+            this.input.keys.cycle = false;
+        }
         if (this.input.keys.space) {
             // Fire from Center (Nose)
-            const spawnPos = this.player.vPos.clone();
+            const spawnPos = this.player.getPosition().clone();
             spawnPos.y -= 0.2; 
             spawnPos.z -= 1.0; 
             
-            this.projectiles.shoot(spawnPos);
-            this.sound.playShoot(); // Pew Pew
+            const ammo = this.weapon.types[this.weapon.current].id;
+            if (ammo === "shotgun") {
+                const pelletCount = 9;
+                const spreadDeg = 10;
+                for (let i = 0; i < pelletCount; i++) {
+                    const angle = this.shotgunPhase + (i / pelletCount) * Math.PI * 2;
+                    const theta = THREE.MathUtils.degToRad(spreadDeg);
+                    const dir = new THREE.Vector3(
+                        Math.cos(angle) * Math.sin(theta),
+                        Math.sin(angle) * Math.sin(theta),
+                        -Math.cos(theta)
+                    );
+                    this.projectiles.shoot(spawnPos, "shotgun", { direction: dir, speed: 55, life: 1.2 });
+                }
+                this.shotgunPhase = (this.shotgunPhase + 0.6) % (Math.PI * 2);
+                this.sound.playCollision();
+            } else if (ammo === "laser") {
+                this.projectiles.fireLaser(spawnPos, new THREE.Vector3(0, 0, -1), this.enemies.enemies, this.obstacles);
+                this.sound.playCollision();
+            } else {
+                this.projectiles.shoot(spawnPos, ammo);
+                this.sound.playShoot(); // Pew Pew
+            }
             this.input.keys.space = false; // Semi-auto
         }
         

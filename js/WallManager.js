@@ -21,16 +21,17 @@ export class WallManager {
   _initPool() {
     // Force Field Material
     const material = new THREE.MeshPhongMaterial({ 
-        color: 0x140606, 
-        emissive: 0x2a0000,
-        transparent: true, 
-        opacity: 0.7,
+        color: 0x000000, 
+        emissive: 0x111111,
+        emissiveIntensity: 0.6,
+        transparent: false, 
+        opacity: 1.0,
         side: THREE.DoubleSide,
         shininess: 60
     });
 
-    const wireMat = new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.8 });
-    const frameMat = new THREE.MeshBasicMaterial({ color: 0x26f5ff, transparent: true, opacity: 1.0 });
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x333333, transparent: false, opacity: 1.0 });
+    const frameMat = new THREE.MeshBasicMaterial({ color: 0x333333, transparent: false, opacity: 1.0 });
 
     for (let i = 0; i < this.poolSize; i++) {
         const group = new THREE.Group();
