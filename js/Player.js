@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { Utils } from "./Utils.js";
 import { SpaceFighter } from "./crafts/SpaceFighter.js";
 import { SteampunkPlane } from "./crafts/SteampunkPlane.js";
+import { GyroCopter } from "./crafts/GyroCopter.js";
+import { RailStriker } from "./crafts/RailStriker.js";
+import { SolarSkimmer } from "./crafts/SolarSkimmer.js";
 
 /**
  * Player Class - Manages the Airship and its movement
@@ -38,10 +41,23 @@ export class Player {
     }
 
     // Instantiate new craft
-    if (type === "fighter") {
+    switch (type) {
+      case "fighter":
         this.craft = new SpaceFighter();
-    } else {
+        break;
+      case "gyro":
+        this.craft = new GyroCopter();
+        break;
+      case "rail":
+        this.craft = new RailStriker();
+        break;
+      case "solar":
+        this.craft = new SolarSkimmer();
+        break;
+      case "plane":
+      default:
         this.craft = new SteampunkPlane();
+        break;
     }
 
     // Add to parent mesh

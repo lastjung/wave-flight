@@ -10,6 +10,7 @@ import { ObstacleManager } from "./ObstacleManager.js";
 import { ProjectileManager } from "./ProjectileManager.js";
 import { EnemyManager } from "./EnemyManager.js";
 import { ItemManager } from "./ItemManager.js";
+import { WallManager } from "./WallManager.js";
 
 /**
  * Main Game Class - Orchestrates the entire simulation
@@ -36,6 +37,8 @@ class Game {
         fuel: 100, // New Fuel State
         isGameOver: false
     };
+    this.lastCollisionSfx = 0;
+    this.lastBoost = false;
 
     // UI Elements
     this.ui = {
@@ -78,6 +81,7 @@ class Game {
     this.projectiles = new ProjectileManager(this.scene);
     this.enemies = new EnemyManager(this.scene);
     this.items = new ItemManager(this.scene, this.env);
+    this.walls = new WallManager(this.scene, this.env); // Init Walls
 
     this.sound = new SoundManager(); // Init Sound Manager
     this.effects = new EffectManager(this.scene); // Init Effects
@@ -96,6 +100,11 @@ class Game {
     window.addEventListener("resize", () => this._onResize());
     window.addEventListener('player-collision', (e) => this._onCollision(e.detail));
     window.addEventListener('player-search-item', (e) => this._onCollision(e.detail)); // Reuse handler
+    window.addEventListener('bullet-hit-wall', (e) => {
+      if (this.effects && e.detail?.position) {
+        this.effects.spawnSpark(e.detail.position);
+      }
+    });
 
     // Audio Init on interaction
     const initAudio = () => {
@@ -130,15 +139,6 @@ class Game {
 
   _onCollision(detail) {
     if (this.state.isGameOver) return;
-    
-    // Increased Impact: Terrain = 0.5, Obstacle = 0.8
-    this.cameraSystem.shake(detail.type === 'terrain' ? 0.5 : 0.8);
-    this.sound.playCollision(); // Play SFX
-    
-    // Explosion Effect
-    if (this.effects && detail.position) {
-        this.effects.explode(detail.position, detail.type === 'terrain' ? 0xff4400 : 0xffaa00, 15);
-    }
 
     // Enemy Destroyed Event
     if (detail.type === 'enemy-destroyed') {
@@ -161,7 +161,34 @@ class Game {
             this.state.score += 1000;
             if (this.effects) this.effects.explode(detail.position, 0xffd700, 10);
         }
+        this.sound.playPickup(detail.type);
         return; // Important: Don't take damage
+    }
+
+    // Wall Collision
+    if (detail.type === 'wall') {
+        this.sound.playExplosion();
+        if (this.effects) this.effects.explode(detail.position, 0xff0000, 20);
+        this.state.health -= 50; // Critical Damage
+        this.cameraSystem.shake(2.0); // Massive Shake
+        
+        if (this.state.health <= 0) {
+            this.state.health = 0;
+            this._triggerGameOver("CRASHED INTO WALL");
+        }
+        return;
+    }
+
+    // Increased Impact: Terrain = 0.5, Obstacle = 0.8
+    this.cameraSystem.shake(detail.type === 'terrain' ? 0.5 : 0.8);
+    if (performance.now() - this.lastCollisionSfx > 120) {
+        this.sound.playCollision(); // Play SFX
+        this.lastCollisionSfx = performance.now();
+    }
+    
+    // Explosion Effect
+    if (this.effects && detail.position) {
+        this.effects.explode(detail.position, detail.type === 'terrain' ? 0xff4400 : 0xffaa00, 15);
     }
 
     // Flash Screen Effect
@@ -251,7 +278,9 @@ class Game {
 
       if (!this.state.isGameOver) {
         // Read UI values
-        const speed = Number(this.ui.speed.value);
+        const baseSpeed = Number(this.ui.speed.value);
+        const speedRamp = 1 + Math.min(0.6, this.state.score / 30000);
+        const speed = baseSpeed * speedRamp;
         const amp = Number(this.ui.amp.value);
         const freq = Number(this.ui.freq.value);
         const glow = Number(this.ui.glow.value);
@@ -264,8 +293,9 @@ class Game {
 
         // Combat Updates
         this.enemies.update(dt, this.player.vPos, speed);
-        this.projectiles.update(dt, this.enemies.enemies);
+        this.projectiles.update(dt, this.enemies.enemies, this.walls.walls); // Pass walls
         this.items.update(dt, this.player.vPos, speed);
+        this.walls.update(dt, this.player.vPos, speed);
 
         // Ground FX (Steam & Lava)
         if (Math.random() < 0.05) { // 5% chance per frame (approx 3 times/sec at 60fps)
@@ -298,10 +328,14 @@ class Game {
         this.cameraSystem.update(t, dt);
         
         // Update Sound (Engine Pitch)
-        // Normalize speed: base is 1.0, boost is 1.8. map to 0..1 range approximately
-        // speed comes from UI slider, input.keys.shift adds boost
+        // Normalize speed from UI slider (0.3..2.5) to 0..1
         const isBoost = this.input.keys.shift;
-        this.sound.updateEngine(isBoost ? 1.0 : 0.0);
+        const speedRatio = Math.max(0, Math.min(1, (speed - 0.3) / 2.2));
+        this.sound.updateEngine(speedRatio, isBoost);
+        if (isBoost && !this.lastBoost) {
+            this.sound.playBoost();
+        }
+        this.lastBoost = isBoost;
 
         // Update Score
         this.state.score += dt * speed * 10;

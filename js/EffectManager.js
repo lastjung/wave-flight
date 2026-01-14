@@ -117,6 +117,24 @@ export class EffectManager {
       }
   }
 
+  spawnSpark(pos) {
+    for (let i = 0; i < 6; i++) {
+      const p = this._getParticle();
+      if (!p) return;
+      p.active = true;
+      p.mesh.visible = true;
+      p.mesh.position.copy(pos);
+      p.mesh.material.color.setHex(0xffaa33);
+      p.mesh.scale.set(0.15, 0.15, 0.15);
+      p.life = 0.6;
+      p.velocity.set(
+        (Math.random() - 0.5) * 6,
+        3 + Math.random() * 4,
+        10 + Math.random() * 6
+      );
+    }
+  }
+
   update(dt) {
     for (const p of this.particles) {
         if (p.active) {
