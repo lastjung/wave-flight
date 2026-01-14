@@ -12,7 +12,7 @@ export class ItemManager {
     this.poolSize = 10;
     
     this.spawnTimer = 0;
-    this.spawnInterval = 5.0; // Rare spawn (every 5s)
+    this.spawnInterval = 2.5; // More frequent spawn (every 2.5s)
 
     this._initPool();
   }
@@ -23,10 +23,20 @@ export class ItemManager {
         
         // Visuals can be swapped based on type later
         // Default: Fuel Can (Blue Cylinder)
-        const geo = new THREE.CylinderGeometry(0.5, 0.5, 1.2, 8);
+        const geo = new THREE.CylinderGeometry(0.7, 0.7, 1.6, 10);
         const mat = new THREE.MeshPhongMaterial({ color: 0x0088ff, emissive: 0x0044aa });
         const mesh = new THREE.Mesh(geo, mat);
         item.add(mesh);
+
+        const glowGeo = new THREE.SphereGeometry(1.2, 12, 12);
+        const glowMat = new THREE.MeshBasicMaterial({
+            color: 0x66ccff,
+            transparent: true,
+            opacity: 0.35,
+            blending: THREE.AdditiveBlending
+        });
+        const glow = new THREE.Mesh(glowGeo, glowMat);
+        item.add(glow);
         
         // Label/Icon? Keep simple for now
         
@@ -37,7 +47,8 @@ export class ItemManager {
         this.pool.push({
             group: item,
             type: 'fuel', // or 'score'
-            active: false
+            active: false,
+            baseY: 0
         });
     }
   }
@@ -52,9 +63,12 @@ export class ItemManager {
     for (let i = this.items.length - 1; i >= 0; i--) {
         const it = this.items[i];
         
-        // Spin
-        it.group.rotation.y += dt;
+        // Spin + bob + pulse
+        it.group.rotation.y += dt * 1.5;
         it.group.rotation.x += dt * 0.5;
+        it.group.position.y = it.baseY + Math.sin(performance.now() * 0.003 + it.group.id) * 0.6;
+        const pulse = 0.9 + Math.sin(performance.now() * 0.004 + it.group.id) * 0.12;
+        it.group.scale.set(pulse, pulse, pulse);
         
         // Move Z
         it.group.position.z += dt * speed * 12;
@@ -85,18 +99,22 @@ export class ItemManager {
     
     // Color change based on type
     const mesh = it.group.children[0];
+    const glow = it.group.children[1];
     if (it.type === 'fuel') {
         mesh.material.color.setHex(0x0088ff); // Blue
         mesh.material.emissive.setHex(0x0044aa);
+        glow.material.color.setHex(0x66ccff);
     } else {
         mesh.material.color.setHex(0xffd700); // Gold
         mesh.material.emissive.setHex(0xffaa00);
+        glow.material.color.setHex(0xffdd66);
     }
 
     const x = (Math.random() - 0.5) * 30;
     const z = -150;
-    const y = this.environment.getHeightAt(x, z) + 5 + Math.random() * 10; // Floating high
+    const y = this.environment.getHeightAt(x, z) + 6 + Math.random() * 12; // Floating high
 
+    it.baseY = y;
     it.group.position.set(x, y, z);
     this.items.push(it);
   }

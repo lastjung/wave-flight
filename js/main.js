@@ -70,6 +70,7 @@ class Game {
       flash: document.getElementById("flash"),
       ammoType: document.getElementById("ammoType"),
       fireBtn: document.getElementById("fireBtn"),
+      ammoBtn: document.getElementById("ammoBtn"),
       hud: document.getElementById("hud"),
       hudToggle: document.getElementById("hudToggle"),
     };
@@ -119,6 +120,11 @@ class Game {
     if (this.ui.fireBtn) {
       this.ui.fireBtn.addEventListener("pointerdown", () => {
         this.input.keys.space = true;
+      });
+    }
+    if (this.ui.ammoBtn) {
+      this.ui.ammoBtn.addEventListener("pointerdown", () => {
+        this._cycleAmmo();
       });
     }
     if (this.ui.hudToggle && this.ui.hud) {
@@ -224,10 +230,10 @@ class Game {
     // Item Collection (Fuel/Score)
     if (detail.type === 'fuel' || detail.type === 'score') {
         if (detail.type === 'fuel') {
-            this.state.fuel = Math.min(100, this.state.fuel + 30);
+            this.state.fuel = Math.min(100, this.state.fuel + 45);
             if (this.effects) this.effects.explode(detail.position, 0x0088ff, 10);
         } else {
-            this.state.score += 1000;
+            this.state.score += 2000;
             if (this.effects) this.effects.explode(detail.position, 0xffd700, 10);
         }
         this.sound.playPickup(detail.type);
